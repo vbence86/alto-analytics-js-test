@@ -1,9 +1,5 @@
 # alto-analytics-js-test
 
-=======================================================
- Task: Options selector with YouTube-like progress bar
-=======================================================
-
 ## Preliminary:
 
 - go to youtube.com and see the 'red progress bar' at the top of a page, which is running from left to right whenever any video/link is chosen. We refer to this progress bar in the rest of the document as YTlike progress bar.
@@ -16,18 +12,6 @@ Please write a single HTML page which has the following functionality.
 - page always adjusts to a size of a browser window (fully filling it up - width and height - with minimal width fixed to 400px and minimal height fixed to 300px)
 - page is split to a 'top toolbar' (where 'options' are displayed) and 'content' (rest of the page)
 - the 'top toolbar' is at least 50px high and is split into 4 equal parts called 'option placeholders' (boxes - side by side - whole boxes clickable)
-
- +-------+-------+-------+-------+
- |  All  | Opt1* | Opt2  | Opt3  |
- +=======+===----+-------+-------|
- |                               |
- |                               |
- |      Currently selected:      |
- |       > Opt 1, Opt 3 <        |
- |                               |
- |                               |
- +-------------------------------+
- 
 - the 4 'option placeholders' for options on top of a page behave as follows:
 -- 'All' option is selected by default
 -- 'All' option is exclusive to other options but other options are not exclusive to themselves and behave like 'toggle options' (if one is selected it can be unselected and vice versa)
