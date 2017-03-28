@@ -1,13 +1,126 @@
 /* global jQuery, window */
-(function($, window, document, undefined) {
 
+/**
+ * Copyrtight 28/03/2017 
+ * Bence Varga <vbence86@gmail.com>
+ */
+
+// shims for requestAnimationFrame 
+var requestAnimationFrame = window.requestAnimationFrame || window.mozRequestAnimationFrame ||window.webkitRequestAnimationFrame || window.msRequestAnimationFrame;
+var cancelAnimationFrame = window.cancelAnimationFrame || window.mozCancelAnimationFrame;
+
+// arbitrary closure to freeze the scope of the App components
+(function($, window, document) {
+
+  /**
+   * Constanst like variables to make the app sightly configurable
+   */
   var Constants = {
     TOOLTIP_ON: 'on',
     TOOLTIP_ALL: 'All',
-    EVENT_CLICK: 'click'
+    EVENT_CLICK: 'click',
+    EVENT_CHANGE: 'change',
+    CONTENT_UPDATE_DELAY_MS: 3000
   };
 
-  var Signal = (function() {
+
+  // *******************************************************************************
+  // ***                              Utility functions                          ***
+  // *******************************************************************************
+
+  // Namespace for utility functions
+  var Util = Util || {};
+  
+  /**
+   * Immediately returns a first-class object that implements an async loop
+   * @return {object} Loop
+   * @example 
+   * var loop = new Util.Loop({
+   *  duration: 3000,
+   *  step: function(...) { ... },
+   *  complete: function(...) { ... }
+   * }) 
+   */
+  Util.Loop = (function() {
+
+    // reference to any existing loop so that we can reset it
+    var raf;
+
+    /**
+     * Returns an anonymus object to handle async loops
+     * @param {object} config
+     * @return {object}
+     */
+    function Loop(config) {
+
+      var duration = config.duration || 0;
+      var timestamp;
+
+      return {
+        
+        start: function() {
+          this.reset();
+          timestamp = new Date().getTime();
+          raf = requestAnimationFrame(this.update.bind(this));
+        },
+
+        update: function update() {
+          var current = new Date().getTime();
+          var diff = current - timestamp;
+          var progress;
+
+          if (diff >= duration) {
+            this.stop();
+          } else {
+            progress = diff / duration;
+            config.step(progress);
+            raf = requestAnimationFrame(update.bind(this));
+          }
+        },
+
+        stop: function() {
+          config.step(1);
+          config.complete();
+        },
+
+        reset: function() {
+          if (raf) {
+            cancelAnimationFrame(raf);
+            raf = null;
+          }
+        }
+
+      };
+
+    };
+
+    return Loop;
+
+  })();   
+
+  /**
+   * Triggers an async loop to which we can register callbacks
+   * @param {object} config 
+   * config.duration The duration of the transition in milliseconds
+   * config.step Callback that is invoked at every tick
+   * config.complete Callback that is invoked when the transition finishes off
+   * @return {void}
+   */
+  Util.transition = function(config) {
+    var loop = new Util.Loop(config);
+    loop.start();
+  }
+
+  /**
+   * Immediately returns a first-class object of a self-contained Event listener
+   * @return {object}
+   * @example 
+   * var signal = new Util.Signal();
+   * signal.addEventListener('myEvent', function(...) { ... });
+   * ...
+   * signal.dispatch('myEvent');
+   */
+  Util.Signal = (function() {
 
     function Signal() {
       this.events = {};
@@ -36,15 +149,35 @@
 
   })();
 
-  var View = {};
+
+
+
+  // *******************************************************************************
+  // ***                           Presentational Layer                          ***
+  // *******************************************************************************
+
+  // namespace for presentational layer
+  var View = View || {};
+
+  /**
+   * ViewController for an indiviual Tooltip element
+   * @param {object} config configuration to dynamically generate the DOM component(s)
+   * @return {object}
+   * @example 
+   * var tooltip = new View.Tooltip({
+   *  parent: parentElement,
+   *  label: 'myLabel',
+   *  selectedByDefault: true
+   * });
+   */
   View.Tooltip = function(config) {
 
-    var selected; 
     var $elm;
-    var signal = new Signal();
+    var selected; 
+    var signal = new Util.Signal();
     signal.addEventListener(Constants.EVENT_CLICK, config.click);
 
-    function isNotUnselectingTheLastTooltip() {
+    function isNotUnselectingAllTheTooltips() {
       return !selected || config.parent.getSelectedTooltips().length !== 1;
     }
 
@@ -65,7 +198,8 @@
         } else {
           config.parent.unselectByLabel(Constants.TOOLTIP_ALL);
         }
-        if (isNotUnselectingTheLastTooltip()) {
+        // at least one tooltip must be selected
+        if (isNotUnselectingAllTheTooltips()) {
           this.toggle();
         }
         signal.dispatch(Constants.EVENT_CLICK, config.label);
@@ -98,11 +232,19 @@
 
   };
 
+  /**
+   * First class object that implements a ViewController for the collection of Tooltip elements
+   * @param {object} config configuration to dynamically generate the DOM component(s)
+   * @return {object}
+   * @example 
+   * var toogle = new View.Toolgle();
+   * toogle.render({ ... });
+   */
   View.Toggle = function() {
 
     var $elm;
     var tooltips = [];
-    var signal = new Signal();
+    var signal = new Util.Signal();
 
     return {
 
@@ -116,7 +258,7 @@
             label: label,
             selectedByDefault: label === Constants.TOOLTIP_ALL,
             click: function() {
-              signal.dispatch(Constants.EVENT_CLICK);
+              signal.dispatch(Constants.EVENT_CHANGE);
             } 
           });
 
@@ -144,8 +286,8 @@
         });
       },
 
-      click: function(callback) {
-        signal.addEventListener(Constants.EVENT_CLICK, callback);
+      change: function(callback) {
+        signal.addEventListener(Constants.EVENT_CHANGE, callback);
       },
 
       getSelectedTooltips: function() {
@@ -158,6 +300,51 @@
 
   };
 
+  /**
+   * First class object that implements a ViewController for the so called YTLikeProgressBar element
+   * @return {object}
+   * @example 
+   * var progressbar = new View.YTLikeProgressBar();
+   * progressbar.update(0.34) // 34%
+   */
+  View.YTLikeProgressBar = function () {
+
+    var $elm;
+
+    return {
+
+      render: function() {
+        $elm = $('<section></section>');
+        $elm.append($('<figure></figure>'));
+        // not visible by default
+        $elm.hide();
+        return $elm;
+      },
+
+      update: function(progress) {
+        var percentage = (progress * 100) + '%';
+        $elm.find('figure').css({ width: percentage});
+      },
+
+      show: function() {
+        $elm.show();
+      },
+
+      hide: function() {
+        $elm.hide();
+      }
+
+    }
+
+  };
+
+  /**
+   * First class object that implements a ViewController for the Content element that displays the selected Tooltips
+   * @return {object}
+   * @example 
+   * var content = new View.Content();
+   * content.updateByToggle(toggle);
+   */
   View.Content = function() {
 
     var $elm;
@@ -188,6 +375,15 @@
 
   };
 
+  /**
+   * First class object that implements a ViewController for the whole Application
+   * it is responsible for generating components that participate in the rendering chain
+   * and attaching them to the given root DOM element.
+   * @return {object}
+   * @example 
+   * var appView = new View.App();
+   * appView.render(document.body, { ... })
+   */
   View.App = function() {
     
     return {
@@ -196,75 +392,134 @@
 
         var contentView = new View.Content();
         var toggleView = new View.Toggle();
+        var progressBarView = new View.YTLikeProgressBar();
         
-        toggleView.click(function() {
-          contentView.updateByToggle(toggleView);
+        toggleView.change(function() {
+          
+          progressBarView.show();
+
+          Util.transition({
+            duration: Constants.CONTENT_UPDATE_DELAY_MS,
+            step: function(progress) {
+              progressBarView.update(progress);
+            },
+            complete: function() {
+              progressBarView.hide();
+              contentView.updateByToggle(toggleView);
+            }
+          });
+
         });
 
         $(root)
           .append(toggleView.render(model))
+          .append(progressBarView.render(model))
           .append(contentView.render(model));
 
         contentView.updateByToggle(toggleView);
+
       },
 
     };
 
   };
 
+
+
+  // *******************************************************************************
+  // ***                             Controllers                                 ***
+  // *******************************************************************************
+
+  /**
+   * Immediately invoked function that returns a first class object that is a bridge
+   * between the presentational layer and model layer.
+   * @return {object} 
+   */
   var Orchestrator = (function() {
     
-    function run(config) {
-      if (!config) throw 'Invalid was given configuration to start the application!';
-
-      var root = config.root || document.body;
-      var store = config.store;
-
-      var view = new View.App();
-      view.render(root, store);
-    }
-
     return {
-      run: run
+      run: function(config) {
+
+        if (!config) throw 'Invalid was given configuration to start the application!';
+
+        var root = config.root || document.body;
+        var store = config.store;
+
+        var view = new View.App();
+        view.render(root, store);
+
+      }
     }
 
   })();
 
-  function getTooltips() {
-    var fixedTooltips = ['All'];
-    var dynamicTooltips = getTooltipsFromURLHash() || getDefaultTooltips();
-    return fixedTooltips.concat(dynamicTooltips);
-  }
 
-  function getTooltipsFromURLHash() {
-    var tooltips;
-    if (window.location.hash && typeof window.location.hash.split === 'function') {
-      tooltips = window.location.hash.substring(1).split('|');
-      if (tooltips.length < 3) return false;
-      return tooltips;
-    }
-    return false;
-  }
 
-  function getDefaultTooltips() {
-    return ['Opt1', 'Opt2', 'Opt3'];
-  }
+  // *******************************************************************************
+  // ***                               App                                       ***
+  // *******************************************************************************
 
-  window.addEventListener('load', function() {
-
-    var root = document.querySelector('#root');
-    var store = {
-      tooltips: getTooltips(),
-      content: {
-        header: 'Currently selected:'
-      }
-    };
+  /**
+   * Immediately invoked function that returns an object that is sort of an 
+   * Entry point to the application
+   * @return {object}
+   * @example 
+   * App.run();
+   */
+  var App = (function() {
     
-    Orchestrator.run({
-      root: root,
-      store: store
-    });
+    function getTooltips() {
+      var fixedTooltips = [Constants.TOOLTIP_ALL];
+      var dynamicTooltips = getTooltipsFromURLHash() || getDefaultTooltips();
+      return fixedTooltips.concat(dynamicTooltips);
+    }
 
-  });
+    function getTooltipsFromURLHash() {
+      var tooltips;
+      if (window.location.hash && typeof window.location.hash.split === 'function') {
+        tooltips = window.location.hash.substring(1).split('|');
+        if (tooltips.length < 3) return false;
+        return tooltips;
+      }
+      return false;
+    }
+
+    function getDefaultTooltips() {
+      return ['Opt1', 'Opt2', 'Opt3'];
+    }
+
+    function getRoot() {
+      return document.querySelector('#root');
+    }
+
+    // the main data model of the application inspired by redux approach
+    function getStore() {
+      return {
+        tooltips: getTooltips(),
+        content: {
+          header: 'Currently selected:'
+        }
+      };
+    }
+
+    return {
+
+      run: function() {
+
+        var root = getRoot();
+        var store = getStore();
+        
+        Orchestrator.run({
+          root: root,
+          store: store
+        });
+
+      }
+    }  
+
+  })();
+
+  // Starts the application once the pageload event is triggered 
+  window.addEventListener('load', App.run);
 
 })(jQuery, window, document);
