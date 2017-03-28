@@ -1,109 +1,269 @@
 /* global jQuery, window */
 (function($, window, document, undefined) {
 
-  var View = (function() {
-    
-    var singleton;
+  var Constants = {
+    TOOLTIP_ON: 'on',
+    TOOLTIP_ALL: 'All',
+    EVENT_CLICK: 'click'
+  };
 
-    function instance(root) {
+  var Signal = (function() {
 
-      function createSection() {
-        return $('<section></section>');
+    function Signal() {
+      this.events = {};
+    }
+
+    Signal.prototype.addEventListener = function(type, listener) {
+      if (!this.events[type]) {
+        this.events[type] = [];
       }
-
-      function createContent() {
-        var label = 'Currently selected:';
-        return $( '<div><h1>' + label + '</h1><h2></h2></div>' );
-      }
-
-      function createTooltip(label) {
-        return $( '<div><span>' + label + '</span></div>' );
-      }
-
-      return {
-        
-        render: function(model) {
-
-          var tooltipSection;
-          var contentSection;
-
-          if (!model) throw 'Invalid data model object has been passed!';
-
-          tooltipSection = createSection().append(createTooltip());
-          contentSection = createSection().append(createContent());
-
-          model.tooltips.reduce(function(container, tooltip) {
-            var tooltipElement = createTooltip(tooltip);
-            $(container).append(tooltipElement);
-            return container;
-          }, tooltipSection);
-
-          $(root)
-            .append(tooltipSection)
-            .append(contentSection);
-        },
-
-      };
-
+      this.events[type].push(listener);
+      return this;
     };
-
-    return {
-
-      create: function(root) {
-        if (!singleton) {
-          singleton = instance(root); 
+    
+    Signal.prototype.dispatch = function(type, event) {
+      if (!this.events[type]) {
+        return;
+      }
+      for (var i in this.events[type]) {
+        if (typeof this.events[type][i] === 'function') {
+          this.events[type][i](event);
         }
-        return singleton;
       }
-
     };
 
-  });
+    return Signal;
 
+  })();
 
-  var Orchestrator = (function(View) {
-    
-    var DEFAULT_TOOLTIPS = ['Opt1', 'Opt2', 'Opt3'];
-    var store = {};
+  var View = {};
+  View.Tooltip = function(config) {
 
-    function init(root) {
-      initStore();
-      initView(root);
-    }
+    var selected; 
+    var $elm;
+    var signal = new Signal();
+    signal.addEventListener(Constants.EVENT_CLICK, config.click);
 
-    function initView(root) {
-      var view = View.create(root);
-      view.render(store);
-    }
-
-    function initStore() {
-      var options = getOptionsFromURLHash() || getDefaultOptions();
-      store = {
-        tooltips: options
-      };
-    }
-
-    function getOptionsFromURLHash() {
-      if (window.location.hash && typeof window.location.hash.split === 'function') {
-        return window.location.hash.split('|');
-      }
-      return false;
-    }
-
-    function getDefaultOptions() {
-      return DEFAULT_TOOLTIPS;
+    function isNotUnselectingTheLastTooltip() {
+      return !selected || config.parent.getSelectedTooltips().length !== 1;
     }
 
     return {
-      init: init,
+
+      render: function() {
+        $elm = $('<div><span>' + this.getLabel() + '</span></div>');
+        $elm.click(this.handleClick.bind(this));
+        if (config.selectedByDefault) {
+          this.select();
+        }
+        return $elm;
+      },
+
+      handleClick: function() {
+        if (config.label === Constants.TOOLTIP_ALL) {
+          config.parent.unselectAll();
+        } else {
+          config.parent.unselectByLabel(Constants.TOOLTIP_ALL);
+        }
+        if (isNotUnselectingTheLastTooltip()) {
+          this.toggle();
+        }
+        signal.dispatch(Constants.EVENT_CLICK, config.label);
+      },
+
+      toggle: function() {
+        selected = !selected;
+        $elm.toggleClass(Constants.TOOLTIP_ON);
+      },
+
+      select: function() {
+        selected = true;
+        $elm.addClass(Constants.TOOLTIP_ON);
+      },
+
+      unselect: function() {
+        selected = false;
+        $elm.removeClass(Constants.TOOLTIP_ON);
+      },
+
+      isSelected: function() {
+        return selected;
+      },
+
+      getLabel: function() {
+        return config.label;
+      }
+
     }
 
-  })(View);
+  };
+
+  View.Toggle = function() {
+
+    var $elm;
+    var tooltips = [];
+    var signal = new Signal();
+
+    return {
+
+      render: function(model) {
+
+        $elm = $('<section></section>');
+        model.tooltips.reduce(function(container, label) {
+
+          var tooltip = new View.Tooltip({
+            parent: this,
+            label: label,
+            selectedByDefault: label === Constants.TOOLTIP_ALL,
+            click: function() {
+              signal.dispatch(Constants.EVENT_CLICK);
+            } 
+          });
+
+          tooltips.push(tooltip)
+          container.append(tooltip.render());
+          return container;
+
+        }.bind(this), $elm);
+
+        return $elm;
+
+      },
+
+      unselectByLabel: function(label) {
+        tooltips.forEach(function(tooltip) {
+          if (tooltip.getLabel() === label) {
+            tooltip.unselect();
+          }
+        });
+      },
+
+      unselectAll: function() {
+        tooltips.forEach(function(tooltip) {
+          tooltip.unselect();
+        });
+      },
+
+      click: function(callback) {
+        signal.addEventListener(Constants.EVENT_CLICK, callback);
+      },
+
+      getSelectedTooltips: function() {
+        return tooltips.filter(function(tooltip) {
+          return tooltip.isSelected();
+        });
+      }
+
+    }
+
+  };
+
+  View.Content = function() {
+
+    var $elm;
+
+    return {
+
+      render: function(model) {
+        var label = model.content.header;
+        $elm = $('<section></section>');
+        $elm.append($('<div><h1>' + label + '</h1><h2></h2></div>'));
+        return $elm;
+      },
+
+      update: function(text) {
+        $elm.find('h2').text(text);
+      },
+
+      updateByToggle: function(toggleView) {
+        var text = toggleView.getSelectedTooltips()
+          .map(function(tooltip) {
+            return tooltip.getLabel();
+          })
+          .join(', ');
+        this.update(text);
+      }
+
+    }
+
+  };
+
+  View.App = function() {
+    
+    return {
+      
+      render: function(root, model) {
+
+        var contentView = new View.Content();
+        var toggleView = new View.Toggle();
+        
+        toggleView.click(function() {
+          contentView.updateByToggle(toggleView);
+        });
+
+        $(root)
+          .append(toggleView.render(model))
+          .append(contentView.render(model));
+
+        contentView.updateByToggle(toggleView);
+      },
+
+    };
+
+  };
+
+  var Orchestrator = (function() {
+    
+    function run(config) {
+      if (!config) throw 'Invalid was given configuration to start the application!';
+
+      var root = config.root || document.body;
+      var store = config.store;
+
+      var view = new View.App();
+      view.render(root, store);
+    }
+
+    return {
+      run: run
+    }
+
+  })();
+
+  function getTooltips() {
+    var fixedTooltips = ['All'];
+    var dynamicTooltips = getTooltipsFromURLHash() || getDefaultTooltips();
+    return fixedTooltips.concat(dynamicTooltips);
+  }
+
+  function getTooltipsFromURLHash() {
+    var tooltips;
+    if (window.location.hash && typeof window.location.hash.split === 'function') {
+      tooltips = window.location.hash.substring(1).split('|');
+      if (tooltips.length < 3) return false;
+      return tooltips;
+    }
+    return false;
+  }
+
+  function getDefaultTooltips() {
+    return ['Opt1', 'Opt2', 'Opt3'];
+  }
 
   window.addEventListener('load', function() {
 
     var root = document.querySelector('#root');
-    Orchestrator.init(root);
+    var store = {
+      tooltips: getTooltips(),
+      content: {
+        header: 'Currently selected:'
+      }
+    };
+    
+    Orchestrator.run({
+      root: root,
+      store: store
+    });
 
   });
 

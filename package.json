@@ -26,6 +26,7 @@
   "scripts": {
     "build": "./build.sh",
     "lint": "eslint src/js/**/*.js",
-    "start": "http-server ./dist"
+    "start": "http-server ./dist",
+    "dev": "http-server ./src"
   }
 }

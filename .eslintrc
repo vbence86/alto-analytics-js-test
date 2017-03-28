@@ -8,7 +8,6 @@
     "parser": "babel-eslint",
     "parserOptions": {
         "ecmaFeatures": {
-            "jsx": true,
             "modules": true,
         	"spread" : true,
         	"restParams" : true
@@ -46,10 +45,6 @@
         "no-unused-vars": 1,
         "no-with": 2,
         "quotes": [2, "single"],
-        "react/jsx-uses-react": 2,
-        "react/jsx-uses-vars": 2,
-        "react/jsx-space-before-closing": 2,
-        "react/self-closing-comp": [2, {"component": true, "html": true}],
         "semi": [0, "never"],
         "valid-typeof": 2,
         "wrap-iife": [2,"inside"]

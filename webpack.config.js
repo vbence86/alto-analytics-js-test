@@ -27,6 +27,7 @@ module.exports = {
     filename: 'bundle.js',
     path: __dirname + '/dist'
   },
+  devtool: 'source-map',
   plugins: [
     new webpack.DefinePlugin({
       'process.env': {
@@ -37,7 +38,9 @@ module.exports = {
         minimize: true,
         compress: {
             warnings: false
-        }}),
+        },
+        sourceMap: true
+    }),
     new HtmlWebpackPlugin({
       template: 'src/pug/app.pug'
     })
