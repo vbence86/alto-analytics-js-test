@@ -177,8 +177,8 @@ var cancelAnimationFrame = window.cancelAnimationFrame || window.mozCancelAnimat
     var signal = new Util.Signal();
     signal.addEventListener(Constants.EVENT_CLICK, config.click);
 
-    function isNotUnselectingAllTheTooltips() {
-      return !selected || config.parent.getSelectedTooltips().length !== 1;
+    function isUnselectingAllTheTooltips() {
+      return selected && config.parent.getSelectedTooltips().length === 1;
     }
 
     return {
@@ -193,15 +193,15 @@ var cancelAnimationFrame = window.cancelAnimationFrame || window.mozCancelAnimat
       },
 
       handleClick: function() {
+        // at least one tooltip must be selected
+        if (isUnselectingAllTheTooltips()) return;
+
         if (config.label === Constants.TOOLTIP_ALL) {
           config.parent.unselectAll();
         } else {
           config.parent.unselectByLabel(Constants.TOOLTIP_ALL);
         }
-        // at least one tooltip must be selected
-        if (isNotUnselectingAllTheTooltips()) {
-          this.toggle();
-        }
+        this.toggle();
         signal.dispatch(Constants.EVENT_CLICK, config.label);
       },
 

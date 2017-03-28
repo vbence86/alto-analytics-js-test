@@ -45,7 +45,13 @@ section:first-of-type div {
   line-height: 5rem;
   text-align: center;
   font-size: 1.5em;
+  border: 1px solid black;
+  border-right: 0;
   cursor: pointer;
+}
+
+section:first-of-type div:last-of-type {
+  border-right: 1px solid black;
 }
 
 section:first-of-type div.on {
