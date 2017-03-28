@@ -99,7 +99,7 @@ var cancelAnimationFrame = window.cancelAnimationFrame || window.mozCancelAnimat
   })();   
 
   /**
-   * Triggers an async loop to which we can register callbacks
+   * Triggers an async loop against which custom callbacks can be register
    * @param {object} config 
    * config.duration The duration of the transition in milliseconds
    * config.step Callback that is invoked at every tick
